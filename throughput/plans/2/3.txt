@@ -1,0 +1,56 @@
+BEGIN;
+BEGIN
+EXPLAIN
+select
+	l_orderkey,
+	sum(l_extendedprice * (1 - l_discount)) as revenue,
+	o_orderdate,
+	o_shippriority
+from
+	customer,
+	orders,
+	lineitem
+where
+	c_mktsegment = 'FURNITURE'
+	and c_custkey = o_custkey
+	and l_orderkey = o_orderkey
+	and o_orderdate < date '1995-03-31'
+	and l_shipdate > date '1995-03-31'
+group by
+	l_orderkey,
+	o_orderdate,
+	o_shippriority
+order by
+	revenue desc,
+	o_orderdate
+LIMIT 10;
+                                                                     QUERY PLAN                                                                     
+----------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=2526015.66..2526015.68 rows=10 width=20)
+   ->  Sort  (cost=2526015.66..2533898.63 rows=3153189 width=20)
+         Sort Key: (sum((lineitem.l_extendedprice * (1::double precision - lineitem.l_discount)))), orders.o_orderdate
+         ->  HashAggregate  (cost=2426344.49..2457876.38 rows=3153189 width=20)
+               Group Key: lineitem.l_orderkey, orders.o_orderdate, orders.o_shippriority
+               ->  Hash Join  (cost=762136.14..2379046.65 rows=3153189 width=20)
+                     Hash Cond: (lineitem.l_orderkey = orders.o_orderkey)
+                     ->  Bitmap Heap Scan on lineitem  (cost=247626.07..1713257.24 rows=31932654 width=12)
+                           Recheck Cond: (l_shipdate > '1995-03-31'::date)
+                           ->  Bitmap Index Scan on lineitem_l_shipdate_l_suppkey_brin_idx  (cost=0.00..239642.91 rows=31932654 width=0)
+                                 Index Cond: (l_shipdate > '1995-03-31'::date)
+                     ->  Hash  (cost=495976.89..495976.89 rows=1482654 width=12)
+                           ->  Hash Join  (cost=107206.83..495976.89 rows=1482654 width=12)
+                                 Hash Cond: (orders.o_custkey = customer.c_custkey)
+                                 ->  Bitmap Heap Scan on orders  (cost=57471.80..403625.74 rows=7410555 width=16)
+                                       Recheck Cond: (o_orderdate < '1995-03-31'::date)
+                                       ->  Bitmap Index Scan on orders_o_orderdate_o_orderkey_brin_idx  (cost=0.00..55619.16 rows=7410555 width=0)
+                                             Index Cond: (o_orderdate < '1995-03-31'::date)
+                                 ->  Hash  (cost=45983.65..45983.65 rows=300110 width=4)
+                                       ->  Bitmap Heap Scan on customer  (cost=6954.28..45983.65 rows=300110 width=4)
+                                             Recheck Cond: (c_mktsegment = 'FURNITURE'::bpchar)
+                                             ->  Bitmap Index Scan on customer_c_mktsegment_c_custkey_idx  (cost=0.00..6879.25 rows=300110 width=0)
+                                                   Index Cond: (c_mktsegment = 'FURNITURE'::bpchar)
+ Planning time: 2.625 ms
+(24 rows)
+
+COMMIT;
+COMMIT

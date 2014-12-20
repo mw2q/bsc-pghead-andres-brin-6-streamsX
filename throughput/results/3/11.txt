@@ -1,0 +1,94 @@
+BEGIN;
+BEGIN
+EXPLAIN (ANALYZE, BUFFERS)
+select
+	ps_partkey,
+	sum(ps_supplycost * ps_availqty) as value
+from
+	partsupp,
+	supplier,
+	nation
+where
+	ps_suppkey = s_suppkey
+	and s_nationkey = n_nationkey
+	and n_name = 'CHINA'
+group by
+	ps_partkey having
+		sum(ps_supplycost * ps_availqty) > (
+			select
+				sum(ps_supplycost * ps_availqty) * 0.0000100000
+			from
+				partsupp,
+				supplier,
+				nation
+			where
+				ps_suppkey = s_suppkey
+				and s_nationkey = n_nationkey
+				and n_name = 'CHINA'
+		)
+order by
+	value desc;
+                                                                                       QUERY PLAN                                                                                       
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Sort  (cost=614386.98..615186.98 rows=320000 width=12) (actual time=6888.136..6889.179 rows=9467 loops=1)
+   Sort Key: (sum((partsupp.ps_supplycost * (partsupp.ps_availqty)::double precision)))
+   Sort Method: quicksort  Memory: 828kB
+   Buffers: shared hit=183088 read=163195
+   InitPlan 1 (returns $1)
+     ->  Aggregate  (cost=288963.31..288963.33 rows=1 width=8) (actual time=2504.291..2504.291 rows=1 loops=1)
+           Buffers: shared hit=170059 read=3081
+           ->  Hash Join  (cost=2405.31..286563.31 rows=320000 width=8) (actual time=26.573..2429.334 rows=319040 loops=1)
+                 Hash Cond: (partsupp_1.ps_suppkey = supplier_1.s_suppkey)
+                 Buffers: shared hit=170059 read=3081
+                 ->  Seq Scan on partsupp partsupp_1  (cost=0.00..250958.00 rows=8000000 width=12) (actual time=0.005..1188.905 rows=8000000 loops=1)
+                       Buffers: shared hit=167877 read=3081
+                 ->  Hash  (cost=2355.31..2355.31 rows=4000 width=4) (actual time=26.490..26.490 rows=3988 loops=1)
+                       Buckets: 4096  Batches: 1  Memory Usage: 173kB
+                       Buffers: shared hit=2182
+                       ->  Nested Loop  (cost=43.00..2355.31 rows=4000 width=4) (actual time=0.297..25.665 rows=3988 loops=1)
+                             Buffers: shared hit=2182
+                             ->  Seq Scan on nation nation_1  (cost=0.00..1.31 rows=1 width=4) (actual time=0.010..0.014 rows=1 loops=1)
+                                   Filter: (n_name = 'CHINA'::bpchar)
+                                   Rows Removed by Filter: 24
+                                   Buffers: shared hit=1
+                             ->  Bitmap Heap Scan on supplier supplier_1  (cost=43.00..2314.00 rows=4000 width=8) (actual time=0.263..25.025 rows=3988 loops=1)
+                                   Recheck Cond: (s_nationkey = nation_1.n_nationkey)
+                                   Rows Removed by Index Recheck: 96012
+                                   Heap Blocks: lossy=2179
+                                   Buffers: shared hit=2181
+                                   ->  Bitmap Index Scan on supplier_s_nationkey_s_suppkey_brin_idx  (cost=0.00..42.00 rows=4000 width=0) (actual time=0.245..0.245 rows=23040 loops=1)
+                                         Index Cond: (s_nationkey = nation_1.n_nationkey)
+                                         Buffers: shared hit=2
+   ->  HashAggregate  (cost=292163.31..296163.31 rows=320000 width=12) (actual time=6810.909..6882.916 rows=9467 loops=1)
+         Group Key: partsupp.ps_partkey
+         Filter: (sum((partsupp.ps_supplycost * (partsupp.ps_availqty)::double precision)) > $1)
+         Rows Removed by Filter: 290849
+         Buffers: shared hit=183085 read=163195
+         ->  Hash Join  (cost=2405.31..286563.31 rows=320000 width=12) (actual time=39.459..4061.864 rows=319040 loops=1)
+               Hash Cond: (partsupp.ps_suppkey = supplier.s_suppkey)
+               Buffers: shared hit=13026 read=160114
+               ->  Seq Scan on partsupp  (cost=0.00..250958.00 rows=8000000 width=16) (actual time=0.028..2703.888 rows=8000000 loops=1)
+                     Buffers: shared hit=10846 read=160112
+               ->  Hash  (cost=2355.31..2355.31 rows=4000 width=4) (actual time=39.396..39.396 rows=3988 loops=1)
+                     Buckets: 4096  Batches: 1  Memory Usage: 173kB
+                     Buffers: shared hit=2180 read=2
+                     ->  Nested Loop  (cost=43.00..2355.31 rows=4000 width=4) (actual time=0.299..38.386 rows=3988 loops=1)
+                           Buffers: shared hit=2180 read=2
+                           ->  Seq Scan on nation  (cost=0.00..1.31 rows=1 width=4) (actual time=0.009..0.013 rows=1 loops=1)
+                                 Filter: (n_name = 'CHINA'::bpchar)
+                                 Rows Removed by Filter: 24
+                                 Buffers: shared hit=1
+                           ->  Bitmap Heap Scan on supplier  (cost=43.00..2314.00 rows=4000 width=8) (actual time=0.282..37.710 rows=3988 loops=1)
+                                 Recheck Cond: (s_nationkey = nation.n_nationkey)
+                                 Rows Removed by Index Recheck: 96012
+                                 Heap Blocks: lossy=2179
+                                 Buffers: shared hit=2179 read=2
+                                 ->  Bitmap Index Scan on supplier_s_nationkey_s_suppkey_brin_idx  (cost=0.00..42.00 rows=4000 width=0) (actual time=0.265..0.265 rows=23040 loops=1)
+                                       Index Cond: (s_nationkey = nation.n_nationkey)
+                                       Buffers: shared read=2
+ Planning time: 2.496 ms
+ Execution time: 6893.490 ms
+(58 rows)
+
+COMMIT;
+COMMIT
